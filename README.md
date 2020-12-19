@@ -20,6 +20,7 @@ the goal of drag and drop items between two RecyclerViews, but this is the
 best we can get from Android right now.
 The drag-drop mechanism's doc: https://developer.android.com/guide/topics/ui/drag-drop
 
-## Not only two
-It's only two RecyclerViews in this demo, but the design is not only for
-two RecyclerViews. It could be as many RecyclerViews as you want, but I haven't test it yet XD
+## Only two
+Right now it can only dragging item between 2 RecyclerViews, but it can
+be easily modify to works for as many RecyclerViews as you want. I'll 
+modify it someday.

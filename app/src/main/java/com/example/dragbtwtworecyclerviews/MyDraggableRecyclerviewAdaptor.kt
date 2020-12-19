@@ -7,6 +7,7 @@ import android.view.*
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.get
+import androidx.core.view.size
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.*
 import kotlin.math.roundToInt
@@ -41,6 +42,13 @@ interface MyDraggableRecyclerviewAdaptor {
      *  @param listener the drag listener that handle all drag events.
      */
     fun setDragListener(listener: MyDragListener)
+
+
+    /**
+     *  RecyclerView.Adaptor's methods that MyDragListener will use.
+     */
+    fun notifyItemMoved(sourcePosition: Int, targetPosition: Int)
+    fun notifyDataSetChanged()
 
     /**
      *  Set each item of the RecyclerView to be draggable.
@@ -105,8 +113,7 @@ interface MyDraggableRecyclerviewAdaptor {
  */
 class MyRecyclerviewAdaptor :
         RecyclerView.Adapter<MyRecyclerviewAdaptor.MyViewHolder>(),
-        MyDraggableRecyclerviewAdaptor
-{
+        MyDraggableRecyclerviewAdaptor {
 
     private var clickListener: OnClickListener? = null
     private var myDataset = mutableListOf<Any>()
@@ -156,7 +163,7 @@ class MyRecyclerviewAdaptor :
         holder.layoutAnimal.setOnClickListener {
             clickListener?.recyclerviewClick(name)
         }
-        setDrag(holder.layoutAnimal, position,dragListener!!)
+        setDrag(holder.layoutAnimal, position, dragListener!!)
     }
 
     /**
@@ -235,11 +242,16 @@ class MyDragListener : View.OnDragListener {
 
 
     override fun onDrag(v: View?, event: DragEvent?): Boolean {
-        if (v == null || v is RecyclerView || v.parent == null) {
+        if (v == null || v.parent == null) {
             return true
         }
         when (event?.action) {
             DragEvent.ACTION_DRAG_STARTED -> {
+                /*
+                 *  Every view which is set as draggable will enter this state
+                 *  when the dragging is begin, and its event.localState are all the same.
+                 *  So we only need to process the first one.
+                 */
                 val sourceView = event.localState as View
                 if (!isStarted && sourceView.parent != null) {
                     val sourcePosition = (sourceView.parent as RecyclerView).getChildAdapterPosition(sourceView)
@@ -249,12 +261,50 @@ class MyDragListener : View.OnDragListener {
                 }
             }
             DragEvent.ACTION_DRAG_ENTERED -> {
+                /*
+                 *  The current touched view is the target view.
+                 *  There's four cases:
+                 *  1. target view is RecyclerView, which is the source view's parent.
+                 *  2. target view is RecyclerView, which is not the source view's parent.
+                 *  3. target view is item, which is in source view's original parent.
+                 *  4. target view is item, which is not in source view's original parent.
+                 */
                 val sourceView = event.localState as View
+                /*
+                 *  Case 1 and 2 (v is RecyclerView):
+                 *      Add source view to the RecyclerView's end only when the
+                 *      target RecyclerView is empty
+                 */
+                if (v is RecyclerView) {
+                    if (v.adapter!!.itemCount == 0) {
+                        val sourceValue = ((sourceView.parent as RecyclerView).adapter as MyRecyclerviewAdaptor).getData()[initPositionInOriParent]
+                        try {
+                            (v.adapter!! as MyDraggableRecyclerviewAdaptor).getData().add(sourceValue)
+                            (v.adapter!! as MyDraggableRecyclerviewAdaptor).notifyDataSetChanged()
+                            initPositionInOtherParent = 0
+                        } catch (e: Exception) {
+                            println("ignore index out of bound")
+                        }
+                        finalParent = v
+                        isOriginalParent = false
+                        finalPosition = 0
+                    }
+                    return true
+                }
+                /*
+                 *  source view must has parent if it's not case 1 and 2.
+                 */
                 if (sourceView.parent == null) {
                     return true
                 }
                 val targetAdaptor = (v.parent as RecyclerView).adapter!! as MyRecyclerviewAdaptor
                 val targetPosition = (v.parent as RecyclerView).getChildAdapterPosition(v)
+                /*
+                 *  Case 3 (v.parent == sourceView.parent):
+                 *      There're 2 sub cases here,
+                 *      (1) Item hasn't dragged out of source view's original parent yet.
+                 *      (2) Item is dragged back to source view's original parent
+                 */
                 if (v.parent == sourceView.parent) {
                     if (isOriginalParent) {
                         try {
@@ -274,7 +324,14 @@ class MyDragListener : View.OnDragListener {
                     }
                     finalPosition = targetPosition
                     finalPositionInOriParent = targetPosition
-                } else {
+                }
+                /*
+                 *  Case 4 (v.parent != sourceView.parent):
+                 *      There're 2 sub cases here,
+                 *      (1) Item is dragged out of source view's original parent the first time.
+                 *      (2) Item is already in other parent.
+                 */
+                else {
                     if (isOriginalParent) {
                         val sourceValue = ((sourceView.parent as RecyclerView).adapter as MyRecyclerviewAdaptor).getData()[initPositionInOriParent]
                         try {
@@ -301,6 +358,11 @@ class MyDragListener : View.OnDragListener {
                 finalParent = v.parent as RecyclerView
             }
             DragEvent.ACTION_DRAG_ENDED -> {
+                /*
+                 *  Every view which is set as draggable will enter this state
+                 *  when the dragging is ended, and its event.localState are all the same.
+                 *  We'll reset all RecyclerView's data in this state.
+                 */
                 val sourceView = event.localState as View
                 if (finalParent == null || sourceView.parent == null) {
                     return true
