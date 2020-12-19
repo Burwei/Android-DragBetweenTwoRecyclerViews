@@ -363,7 +363,17 @@ class MyDragListener : View.OnDragListener {
                  *  when the dragging is ended, and its event.localState are all the same.
                  *  We'll reset all RecyclerView's data in this state.
                  */
+                println("ACTION_DRAG_ENDED")
                 val sourceView = event.localState as View
+                /*
+                 *  v is RecyclerView, refresh all RecyclerViews.
+                 */
+                if(v is RecyclerView){
+                    (v.adapter as MyDraggableRecyclerviewAdaptor).notifyDataSetChanged()
+                }
+                /*
+                 *  v is Item, update the data.
+                 */
                 if (finalParent == null || sourceView.parent == null) {
                     return true
                 }
